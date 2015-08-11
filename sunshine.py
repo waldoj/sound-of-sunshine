@@ -65,10 +65,6 @@ cursor.execute("INSERT INTO energy VALUES(?, ?, ?)", \
               (int(time.time()), int(energy_data['using']), int(energy_data['generating'])))
 db.commit()
 
-# Store the power use and generation data to a JSON file
-f = open(config['status_file'], 'w')
-f.write(json.dumps(energy_data))
-f.close()
 
 # Generate a new HTML page
 template = open('index.tmpl').read(10000)
@@ -93,3 +89,11 @@ if (energy_data['generating'] - energy_data['using']) > 1000:
                'message': str(int(energy_data['generating']) - int(energy_data['using'])) + ' excess watts.'}
     r = requests.post("https://api.pushover.net/1/messages.json", data=payload)
     os.utime('.notified', None)
+    # Store the past 12 hours of power use and generation data in a JSON file
+    cursor.execute("SELECT time, used, generated FROM energy ORDER BY time DESC LIMIT 360")
+    records = cursor.fetchmany(360)
+    records = list(reversed(records))
+    f = open(config['status_file'], 'w')
+    f.write(json.dumps(records))
+    f.close()
+
