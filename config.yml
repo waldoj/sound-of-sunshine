@@ -1,0 +1,13 @@
+# Enphase API
+enphase_key: 
+enphase_user: 
+enphase_system: 
+
+# Pushover API
+pushover_token: 
+pushover_user: 
+
+# File locations
+data_file: packet.csv
+log_file: use.csv
+status_file: status.json
