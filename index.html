@@ -19,10 +19,10 @@
 <h1>Energy Monitor</h1>
 
 <h2>Using</h2>
-{{using}}
+<div id="using"></div>
 
 <h2>Generating</h2>
-{{generating}}
+<div id="generating"></div>
 
 <h2>Past 12 Hours</h2>
 <div id="chart"></div>
@@ -50,6 +50,15 @@
 
 <script>
 $(document).ready(function() {
+
+	/* Apply the most recent data from status.json.  */
+	$.getJSON( 'status.json', function( data ) {
+
+		var status = $(data).last()[0];
+		$("#generating").text(status['generated']);
+		$("#using").text(status['used']);
+
+	});
 
 	/* Chart the last 12 hours of power generation and use. */
 	var chart = c3.generate({

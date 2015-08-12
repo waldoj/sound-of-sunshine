@@ -74,25 +74,9 @@ def main():
     f.write(json.dumps(records))
     f.close()
 
-    # Generate a new HTML page
-    generate_html
-
     # Send an alert if we're generating >1kW of unused power, but no more often than hourly
     if (energy_data['generating'] - energy_data['using']) > 1000:
         pushover_notice
-
-# Generate a new HTML page
-def generate_html():
-    template = open('index.tmpl').read(10000)
-    template = template.replace('{{using}}', str(energy_data['using']))
-    template = template.replace('{{generating}}', str(energy_data['generating']))
-    if energy_data['using'] > energy_data['generating']:
-        template = template.replace('{{color}}', 'red')
-    else:
-        template = template.replace('{{color}}', 'green')
-    f = open('index.html', 'w')
-    f.write(template)
-    f.close()
 
 # Send a notice via Pushover
 def pushover_notice():
