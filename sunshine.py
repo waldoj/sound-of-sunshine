@@ -28,7 +28,7 @@ def main():
     for record in records:
         usage = int(record["ch1watts"]) + int(record["ch2watts"])
         watts.append(usage)
-    energy_data['using'] = round(sum(watts) / len(watts))
+    energy_data['using'] = int(round(sum(watts) / len(watts)))
 
     # Fetch Enphase data
     enphase_url = 'https://api.enphaseenergy.com/api/v2/systems/' \
