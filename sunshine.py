@@ -19,7 +19,9 @@ def main():
         print config['data_file'] + " not found"
         sys.exit()
 
-    # Parse cron-retrieved records
+    # Parse cron-retrieved records, providing the average amount of power used
+    # in the prior two minutes. (The data file contains records with a granularity
+    # that's much finer.)
     energy_data = dict()
     records = csvkit.CSVKitDictReader(open(config['data_file'], 'rb'))
     watts = []
@@ -36,7 +38,7 @@ def main():
     solar_data = json.loads(response.read())
     energy_data['generating'] = int(solar_data["current_power"])
 
-    # Send raw JSON to the terminal
+    # Display the power use and generation data on the command line
     print energy_data
 
     # Store the power use and generation data to a log file
@@ -62,7 +64,6 @@ def main():
         cursor.execute("CREATE TABLE energy(time INTEGER PRIMARY KEY NOT NULL, "
             + "used INTEGER, generated INTEGER)")
         db.commit()
-
     cursor.execute("INSERT INTO energy VALUES(?, ?, ?)", \
                   (int(time.time()), int(energy_data['using']), int(energy_data['generating'])))
     db.commit()
