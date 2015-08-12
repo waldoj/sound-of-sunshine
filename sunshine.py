@@ -76,20 +76,15 @@ def main():
 
     # Send an alert if we're generating >1kW of unused power, but no more often than hourly
     if (energy_data['generating'] - energy_data['using']) > 1000:
-        pushover_notice
-
-# Send a notice via Pushover
-def pushover_notice():
-    if not os.path.exists('.notified'):
-        os.mknod('.notified')
-    if int(time.time()) - os.path.getmtime('.notified') > 3600:    
-        payload = {'token':  config['pushover_token'],
-                 'user':   config['pushover_user'],
-                 'title':  'Generating Excess Power',
-                 'message': str(int(energy_data['generating']) - int(energy_data['using'])) + ' excess watts.'}
-        r = requests.post('https://api.pushover.net/1/messages.json', data=payload)
-        os.utime('.notified', None)
-        return True
+        if not os.path.exists('.notified'):
+            os.mknod('.notified')
+        if int(time.time()) - os.path.getmtime('.notified') > 3600:    
+            payload = {'token':  config['pushover_token'],
+                     'user':   config['pushover_user'],
+                     'title':  'Generating Excess Power',
+                     'message': str(int(energy_data['generating']) - int(energy_data['using'])) + ' excess watts.'}
+            r = requests.post('https://api.pushover.net/1/messages.json', data=payload)
+            os.utime('.notified', None)
 
 def dict_factory(cursor, row):
     d = {}
