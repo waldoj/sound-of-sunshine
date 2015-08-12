@@ -68,7 +68,11 @@ def main():
     db.commit()
 
     # Store the past 12 hours of power use and generation data in a JSON file
-    cursor.execute("SELECT time, used, generated FROM energy ORDER BY time DESC LIMIT 360")
+    db.close()
+    db = sqlite3.connect('energy.db')
+    db.row_factory = dict_factory
+    cursor = db.cursor()
+    cursor.execute("SELECT datetime(time, 'unixepoch') AS time, used, generated FROM energy ORDER BY time DESC LIMIT 360")
     records = cursor.fetchmany(360)
     records = list(reversed(records))
     f = open(config['status_file'], 'w')
@@ -98,6 +102,12 @@ def main():
                      'message': str(int(energy_data['generating']) - int(energy_data['using'])) + ' excess watts.'}
         r = requests.post("https://api.pushover.net/1/messages.json", data=payload)
         os.utime('.notified', None)
+
+def dict_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
 
 if __name__ == "__main__":
     main()
