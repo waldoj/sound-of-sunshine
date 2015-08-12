@@ -41,12 +41,6 @@ def main():
     # Display the power use and generation data on the command line
     print energy_data
 
-    # Store the power use and generation data to a log file
-    f = open(config['log_file'], 'a')
-    f.write(str(time.time()) + ',' + str(energy_data['using']) + ','
-        + str(energy_data['generating']) + "\n")
-    f.close()
-
     # Store the power use and generation data to SQLite.
     try:
         db = sqlite3.connect('energy.db')
