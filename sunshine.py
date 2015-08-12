@@ -75,6 +75,14 @@ def main():
     f.close()
 
     # Generate a new HTML page
+    generate_html
+
+    # Send an alert if we're generating >1kW of unused power, but no more often than hourly
+    if (energy_data['generating'] - energy_data['using']) > 1000:
+        pushover_notice
+
+# Generate a new HTML page
+def generate_html():
     template = open('index.tmpl').read(10000)
     template = template.replace('{{using}}', str(energy_data['using']))
     template = template.replace('{{generating}}', str(energy_data['generating']))
@@ -86,17 +94,18 @@ def main():
     f.write(template)
     f.close()
 
-    # Send an alert if we're generating >1kW of unused power, but no more often than hourly
-    if (energy_data['generating'] - energy_data['using']) > 1000:
-        if not os.path.exists('.notified'):
-            os.mknod('.notified')
-        if int(time.time()) - os.path.getmtime('.notified') > 3600:
-          payload = {'token':  config['pushover_token'],
-                     'user':   config['pushover_user'],
-                     'title':  'Generating Excess Power',
-                     'message': str(int(energy_data['generating']) - int(energy_data['using'])) + ' excess watts.'}
-        r = requests.post("https://api.pushover.net/1/messages.json", data=payload)
+# Send a notice via Pushover
+def pushover_notice():
+    if not os.path.exists('.notified'):
+        os.mknod('.notified')
+    if int(time.time()) - os.path.getmtime('.notified') > 3600:    
+        payload = {'token':  config['pushover_token'],
+                 'user':   config['pushover_user'],
+                 'title':  'Generating Excess Power',
+                 'message': str(int(energy_data['generating']) - int(energy_data['using'])) + ' excess watts.'}
+        r = requests.post('https://api.pushover.net/1/messages.json', data=payload)
         os.utime('.notified', None)
+        return True
 
 def dict_factory(cursor, row):
     d = {}
