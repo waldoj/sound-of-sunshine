@@ -67,7 +67,10 @@ def main():
     db = sqlite3.connect('energy.db')
     db.row_factory = dict_factory
     cursor = db.cursor()
-    cursor.execute("SELECT datetime(time, 'unixepoch') AS time, used, generated FROM energy ORDER BY time DESC LIMIT 360")
+    cursor.execute("SELECT datetime(time, 'unixepoch') AS time, used, generated \
+                    FROM energy \
+                    WHERE datetime(time, 'unixepoch') >= datetime(current_timestamp, 'localtime') - (60 * 60 * 12) \
+                    ORDER BY time DESC")
     records = cursor.fetchmany(360)
     records = list(reversed(records))
     f = open(config['status_file'], 'w')
