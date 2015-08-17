@@ -7,6 +7,20 @@ enphase_system:
 pushover_token: 
 pushover_user: 
 
+# Nest
+# Their API is only open to large-scale app developers, so we have to interface
+# with it via a screen-scraping method, which necessitates using a Nest
+# username and password instead of an API key.
+nest_username: 
+nest_password: 
+nest_settings:
+  heat:
+    high: 73
+    low: 68
+  cool:
+    high: 73
+    low: 68
+
 # File locations
 data_file: packet.csv
 log_file: use.csv
