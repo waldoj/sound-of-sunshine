@@ -76,7 +76,7 @@ def main():
     cursor.execute("SELECT datetime(time, 'unixepoch', 'localtime') AS time, \
                     used, generated \
                     FROM energy \
-                    WHERE time >= time - (60 * 60 * 12) \
+                    WHERE time >= (strftime('%s','now') - (60 * 60 * 12)) \
                     ORDER BY time DESC")
     records = cursor.fetchmany(360)
     records = list(reversed(records))
