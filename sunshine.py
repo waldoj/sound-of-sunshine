@@ -56,7 +56,8 @@ def main():
     cursor = db.cursor()
 
     # See if the database table exists. If not, create it.
-    cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='energy'")
+    cursor.execute("SELECT 1 \
+                    FROM sqlite_master \
                     WHERE type='table' AND name='energy'")
     exists = cursor.fetchone()
     if exists is None:
