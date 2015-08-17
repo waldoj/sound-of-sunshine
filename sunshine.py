@@ -13,6 +13,7 @@ import urllib, json
 import time
 import requests
 import yaml
+from subprocess import call
 
 # Load the config file.
 CONFIG = yaml.safe_load(open('config.yml'))
@@ -100,12 +101,60 @@ def main():
             requests.post('https://api.pushover.net/1/messages.json', data=payload)
             os.utime('.notified', None)
 
+        # See if we've been generating >1kW for at least 20 minutes.
+        cursor.execute("SELECT generated \
+                        FROM energy \
+                        WHERE time >= (strftime('%s','now') - (60*20) ) \
+                        ORDER BY time DESC")
+        records = cursor.fetchall()
+        insufficient = False
+        for record in records:
+            if record['generated'] < 1000:
+                insufficient = True
+                break
+        if insufficient == False:
+            nest_set()
+
 def dict_factory(cursor, row):
     """Emit SQLite results as a dict."""
     d = {}
     for idx, col in enumerate(cursor.description):
         d[col[0]] = row[idx]
     return d
+
+def nest_status():
+    """Get the status of the Nest."""
+
+    # If it's cached, and the cached file is less than 30 minutes old, use it.
+    if os.path.exists('.neststatus'):
+        file_status = os.stat('.neststatus')
+        if (int(time.time()) - file_status.st_mtime) < (60 * 30):
+            return json.loads(open(filename).read(10000))
+
+    # Retrieve status data from Nest.
+    status = call(['nestcontrol/nest.py', '-u ' + CONFIG['nest']['username'] \
+        + ' -p ' + CONFIG['nest']['password'] + ' -f'])
+    status = json.loads(status)[0]['shared']
+    return status
+
+def nest_set():
+    """Set the Nest temperature."""
+    # Get the status of the Nest.
+    status = nest_status()
+
+    # If nobody's home, there's no sense in adjusting the temperature.
+    if status['auto_away'] == 1:
+        return False
+
+    # If the current temperature settings are different than the excess-power
+    # settings.
+    if status['target_temperature_low'] != CONFIG['nest']['excess']['low'] and \
+        status['target_temperature_high'] != CONFIG['nest']['excess']['high']:
+
+        status = call(['nestcontrol/nest.py', '-u ' + CONFIG['nest']['username'] \
+            + ' -p ' + CONFIG['nest']['password'] + ' ' \
+            + CONFIG['nest']['excess']['low'] + '-' \
+            + CONFIG['nest']['excess']['high']])
 
 if __name__ == "__main__":
     main()
