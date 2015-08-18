@@ -46,12 +46,17 @@ def main():
     # Display the power use and generation data on the command line
     print energy_data
 
+    # Make database connection variables available to all functions.
+    global db
+    global cursor
+
     # Store the power use and generation data to SQLite.
     try:
         db = sqlite3.connect('energy.db')
     except sqlite3.error, e:
         print "Count not connect to SQLite, with error %s:" % e.args[0]
         sys.exit(1)
+    db.row_factory = dict_factory
 
     # Create a SQLite cursor.
     cursor = db.cursor()
@@ -63,18 +68,14 @@ def main():
     exists = cursor.fetchone()
     if exists is None:
         cursor.execute("CREATE TABLE energy(time INTEGER PRIMARY KEY NOT NULL, " \
-            + "used INTEGER, generated INTEGER)")
+            + "used INTEGER, generated INTEGER, label TEXT NULL, change TEXT NULL)")
         db.commit()
-    cursor.execute("INSERT INTO energy VALUES(?, ?, ?)", \
+    cursor.execute("INSERT INTO energy (time, used, generated) VALUES(?, ?, ?)", \
                     (int(time.time()), int(energy_data['using']), \
                     int(energy_data['generating'])))
     db.commit()
 
     # Store the past 12 hours of power use and generation data in a JSON file
-    db.close()
-    db = sqlite3.connect('energy.db')
-    db.row_factory = dict_factory
-    cursor = db.cursor()
     cursor.execute("SELECT datetime(time, 'unixepoch', 'localtime') AS time, \
                     used, generated \
                     FROM energy \
@@ -139,6 +140,7 @@ def nest_status():
 
 def nest_set():
     """Set the Nest temperature."""
+
     # Get the status of the Nest.
     status = nest_status()
 
@@ -156,5 +158,46 @@ def nest_set():
             + CONFIG['nest']['excess']['low'] + '-' \
             + CONFIG['nest']['excess']['high']])
 
+
+def label_use():
+    """Label identifable draws on the power."""
+
+    # Get power use over the past 120 minutes.
+    cursor.execute("SELECT time, used, label \
+                    FROM energy \
+                    WHERE time >= (strftime('%s','now') - (60 * 120) ) \
+                    ORDER BY time ASC")
+    records = cursor.fetchall()
+
+    # If the difference between two points in time matches a device's draw,
+    # record that fact in the database.
+    prior = 0
+    prior_2 = 0
+    for record in records:
+        if record['label'] is not None:
+            prior_2 = prior
+            prior = record['used']
+            continue
+        change = abs(record['used'] - prior)
+        change_2 = abs(record['used'] - prior_2)
+        for device in CONFIG['devices']:
+            if (change >= device['watts']['low'] and change <= device['watts']['high']) or \
+                (change_2 >= device['watts']['low'] and change_2 <= device['watts']['high']):
+                if record['used'] > prior:
+                   state = "on"
+                else:
+                   state = "off"
+                cursor.execute("UPDATE energy \
+                                SET label = ?, change = ? \
+                                WHERE time = ?",
+                                (device['name'], state, record['time']))
+                db.commit()
+                break
+        prior_2 = prior
+        prior = record['used']
+
+    return True
+
 if __name__ == "__main__":
     main()
+    label_use()
