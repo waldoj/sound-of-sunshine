@@ -77,7 +77,7 @@ def main():
 
     # Store the past 12 hours of power use and generation data in a JSON file
     cursor.execute("SELECT datetime(time, 'unixepoch', 'localtime') AS time, \
-                    used, generated \
+                    used, generated, label, change \
                     FROM energy \
                     WHERE time >= (strftime('%s','now') - (60 * 60 * 12)) \
                     ORDER BY time DESC")
