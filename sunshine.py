@@ -11,6 +11,7 @@ import sys
 import sqlite3
 import urllib, json
 import time
+import datetime
 import requests
 import yaml
 from subprocess import call
@@ -24,33 +25,11 @@ def main():
         print CONFIG['data_file'] + " not found"
         sys.exit()
 
-    # Parse cron-retrieved records, providing the average amount of power used
-    # in the prior two minutes. (The data file contains records with a
-    # granularity that's much finer.)
-    energy_data = dict()
-    records = csvkit.CSVKitDictReader(open(CONFIG['data_file'], 'rb'))
-    watts = []
-    for record in records:
-        usage = int(record["ch1watts"]) + int(record["ch2watts"])
-        watts.append(usage)
-    energy_data['using'] = int(round(sum(watts) / len(watts)))
-
-    # Fetch Enphase data
-    enphase_url = 'https://api.enphaseenergy.com/api/v2/systems/' \
-        + CONFIG['enphase_system'] + '/summary?key=' + CONFIG['enphase_key'] \
-        + '&user_id=' + CONFIG['enphase_user']
-    response = urllib.urlopen(enphase_url)
-    solar_data = json.loads(response.read())
-    energy_data['generating'] = int(solar_data["current_power"])
-
-    # Display the power use and generation data on the command line
-    print energy_data
-
     # Make database connection variables available to all functions.
     global db
     global cursor
 
-    # Store the power use and generation data to SQLite.
+    # Open up a SQLite connection.
     try:
         db = sqlite3.connect('energy.db')
     except sqlite3.error, e:
@@ -68,26 +47,83 @@ def main():
     exists = cursor.fetchone()
     if exists is None:
         cursor.execute("CREATE TABLE energy(time INTEGER PRIMARY KEY NOT NULL, " \
-            + "used INTEGER, generated INTEGER, label TEXT NULL, change TEXT NULL)")
+            + "used INTEGER, generated INTEGER, label TEXT NULL, change TEXT NULL, "\
+            + " temp_int INT NULL, temp_ext INT NULL")
         db.commit()
-    cursor.execute("INSERT INTO energy (time, used, generated) VALUES(?, ?, ?)", \
-                    (int(time.time()), int(energy_data['using']), \
-                    int(energy_data['generating'])))
+
+    # See when we last recorded power use data.
+    cursor.execute("SELECT time \
+                    FROM energy \
+                    WHERE used IS NOT NULL \
+                    ORDER BY time DESC \
+                    LIMIT 1")
+    last = cursor.fetchone()
+
+    # Parse cron-retrieved records, providing the average amount of power used
+    # in the prior two minutes. (The data file contains records with a
+    # granularity that's much finer.)
+    energy_data = dict()
+    records = csvkit.CSVKitDictReader(open(CONFIG['data_file'], 'rb'))
+    watts = []
+    for record in records:
+        if last['time'] >= int(round(float(record['src']))):
+            continue
+        print str(last['time']) + " > " + str(int(round(float(record['src']))))
+        energy_data['time'] = int(round(float(record['src'])))
+        energy_data['using'] = int(record['ch1watts']) + int(record['ch2watts'])
+        energy_data['temp_int'] = int(float(record['tmprF']))
+        print energy_data
+        cursor.execute("INSERT INTO energy (time, used, temp_int) " \
+                        + "VALUES(?, ?, ?)", \
+                        (energy_data['time'], energy_data['using'], \
+                        energy_data['temp_int']))
     db.commit()
+
+    # Fetch Enphase data
+    enphase_url = 'https://api.enphaseenergy.com/api/v2/systems/' \
+        + CONFIG['enphase_system'] + '/summary?key=' + CONFIG['enphase_key'] \
+        + '&user_id=' + CONFIG['enphase_user']
+    response = urllib.urlopen(enphase_url)
+    solar_data = json.loads(response.read())
+    
+    energy_data['generating'] = int(solar_data['current_power'])
+    energy_data['generating_time'] = int(float(solar_data['last_report_at']))
+
+    # See when we last recorded power generation data.
+    cursor.execute("SELECT time \
+                    FROM energy \
+                    WHERE generated IS NOT NULL \
+                    ORDER BY time DESC \
+                    LIMIT 1")
+    last = cursor.fetchone()
+    if last['time'] < energy_data['generating_time']:
+
+        cursor.execute("INSERT INTO energy (time, generated) " \
+                        + "VALUES(?, ?)", \
+                        (energy_data['generating_time'], energy_data['generating']))
+        db.commit()
+
+    # Display the power use and generation data on the command line
+    print energy_data
 
     # Store the past 12 hours of power use and generation data in a JSON file
     cursor.execute("SELECT datetime(time, 'unixepoch', 'localtime') AS time, \
-                    used, generated, label, change \
+                    used, generated, label, change, temp_int \
                     FROM energy \
                     WHERE time >= (strftime('%s','now') - (60 * 60 * 12)) \
                     ORDER BY time DESC")
     records = cursor.fetchmany(360)
     records = list(reversed(records))
+    output = {}
+    output['history'] = records
+    output['cumulative'] = daily_cumulative()
+    output['cumulative']['generated'] = solar_data['energy_today']
+
     f = open(CONFIG['status_file'], 'w')
-    f.write(json.dumps(records))
+    f.write(json.dumps(output))
     f.close()
 
-    # If we're generating >1kW of unused power, reply.
+    # If we're generating >1kW of unused power.
     if (energy_data['generating'] - energy_data['using']) > 1000:
 
         # Send an alert, but no more often than hourly
@@ -115,6 +151,8 @@ def main():
                 break
         if insufficient == False:
             nest_set()
+
+    db.close
 
 def dict_factory(cursor, row):
     """Emit SQLite results as a dict."""
@@ -159,13 +197,41 @@ def nest_set():
             + CONFIG['nest']['excess']['high']])
 
 
+def daily_cumulative():
+    """Calculate the cumulative power use and generation since midnight."""
+
+    # Figure out the timestamp for midnight, when today started.
+    today = datetime.date.today()
+    d = datetime.datetime(today.year, today.month, today.day)
+    midnight = time.mktime(d.timetuple())
+    
+    cursor.execute("SELECT time, used, generated \
+                    FROM energy \
+                    WHERE used IS NOT NULL AND time >= ?",
+                    ((midnight,)))
+    records = cursor.fetchall()
+
+    prior = midnight
+    used = []
+    generated = []
+    for record in records:
+        duration = int(record['time'] - prior)
+        used.append(int(record['used']) / int(60.0 * 60.0) / duration)
+        prior = record['time']
+
+    cumulative = {}
+    cumulative['used'] = round(sum(used) / len(used) * 10000, 2)
+
+    return cumulative
+
 def label_use():
     """Label identifable draws on the power."""
 
     # Get power use over the past 120 minutes.
     cursor.execute("SELECT time, used, label \
                     FROM energy \
-                    WHERE time >= (strftime('%s','now') - (60 * 120) ) \
+                    WHERE used IS NOT NULL \
+                    AND time >= (strftime('%s','now') - (60 * 120) ) \
                     ORDER BY time ASC")
     records = cursor.fetchall()
 
