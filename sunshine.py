@@ -68,11 +68,9 @@ def main():
     for record in records:
         if last['time'] >= int(round(float(record['src']))):
             continue
-        print str(last['time']) + " > " + str(int(round(float(record['src']))))
         energy_data['time'] = int(round(float(record['src'])))
         energy_data['using'] = int(record['ch1watts']) + int(record['ch2watts'])
         energy_data['temp_int'] = int(float(record['tmprF']))
-        print energy_data
         cursor.execute("INSERT INTO energy (time, used, temp_int) " \
                         + "VALUES(?, ?, ?)", \
                         (energy_data['time'], energy_data['using'], \
@@ -171,12 +169,16 @@ def export_json():
                     FROM energy \
                     WHERE time >= (strftime('%s','now') - (60 * 60 * 12)) \
                     ORDER BY time DESC")
-    records = cursor.fetchmany(360)
+    records = cursor.fetchmany(10000)
     records = list(reversed(records))
+
     output = {}
     output['history'] = records
-    output['cumulative'] = daily_cumulative()
-    output['cumulative']['generated'] = solar_data['energy_today']
+    
+    output['today'] = daily_cumulative()
+    output['today']['generated'] = solar_data['energy_today']
+
+    output['current'] = get_current_status()
 
     f = open(CONFIG['status_file'], 'w')
     f.write(json.dumps(output))

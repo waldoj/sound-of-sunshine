@@ -18,11 +18,21 @@
 <body>
 <h1>Energy Monitor</h1>
 
-<h2>Using</h2>
+<h2>Now</h2>
+
+<h3>Using</h3>
 <div id="using"></div>
 
-<h2>Generating</h2>
+<h3>Generating</h3>
 <div id="generating"></div>
+
+<h2>Today</h2>
+
+<h3>Used</h3>
+<div id="daily_used"></div>
+
+<h3>Generated</h3>
+<div id="daily_generated"></div>
 
 <h2>Past 12 Hours</h2>
 <div id="chart"></div>
@@ -54,20 +64,26 @@ $(document).ready(function() {
 	/* Apply the most recent data from status.json.  */
 	$.getJSON( 'status.json', function( data ) {
 
-		var status = $(data).last()[0];
-		$("#generating").text(status['generated']);
-		$("#using").text(status['used']);
+		var status = $(data.current)[0];
+		$("#generating").text(status['generated']) + 'watts';
+		$("#using").text(status['used']) + ' watts';
+
+		var today = $(data.today)[0];
+		$("#daily_generated").text(today['generated']);
+		$("#daily_used").text(today['used']);
+
+		status_history = JSON.stringify($(data.history));
 
 	});
 
 	/* Chart the last 12 hours of power generation and use. */
+	console.log(status_history);
 	var chart = c3.generate({
 	    bindto: '#chart',
 	    data: {
 	    	x: 'time',
 	    	xFormat: '%Y-%m-%d %H:%M:%S',
-	    	url: 'status.json',
-	    	mimeType: 'json',
+	    	json: status_history,
 	    	keys: {
 	    		value: ['time', 'used', 'generated']
 	    	},
@@ -83,6 +99,9 @@ $(document).ready(function() {
 	    			format: '%H:%M'
 	    		}
 	    	}
+	    },
+	    point: {
+	    	show: false
 	    }
 	});
 
