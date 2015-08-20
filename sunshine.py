@@ -84,12 +84,14 @@ def main():
         + CONFIG['enphase_system'] + '/summary?key=' + CONFIG['enphase_key'] \
         + '&user_id=' + CONFIG['enphase_user']
     response = urllib.urlopen(enphase_url)
+    # We make this a global as a lousy hack to access it in export_json()
+    global solar_data
     solar_data = json.loads(response.read())
     
     energy_data['generating'] = int(solar_data['current_power'])
     energy_data['generating_time'] = int(float(solar_data['last_report_at']))
 
-    # See when we last recorded power generation data.
+    # See when we last recorded power generation data, to avoid duplicates.
     cursor.execute("SELECT time \
                     FROM energy \
                     WHERE generated IS NOT NULL \
@@ -106,37 +108,17 @@ def main():
     # Display the power use and generation data on the command line
     print energy_data
 
-    # Store the past 12 hours of power use and generation data in a JSON file
-    cursor.execute("SELECT datetime(time, 'unixepoch', 'localtime') AS time, \
-                    used, generated, label, change, temp_int \
-                    FROM energy \
-                    WHERE time >= (strftime('%s','now') - (60 * 60 * 12)) \
-                    ORDER BY time DESC")
-    records = cursor.fetchmany(360)
-    records = list(reversed(records))
-    output = {}
-    output['history'] = records
-    output['cumulative'] = daily_cumulative()
-    output['cumulative']['generated'] = solar_data['energy_today']
+    # Save the last 12 hours of data as a JSON File.
+    export_json()
 
-    f = open(CONFIG['status_file'], 'w')
-    f.write(json.dumps(output))
-    f.close()
+    # Retrieve the most recent power data from the database.
+    energy_data = get_current_status()
 
     # If we're generating >1kW of unused power.
-    if (energy_data['generating'] - energy_data['using']) > 1000:
+    if (energy_data['generated'] - energy_data['used']) > 1000:
 
-        # Send an alert, but no more often than hourly
-        if not os.path.exists('.notified'):
-            os.mknod('.notified')
-        if int(time.time()) - os.path.getmtime('.notified') > 3600:
-            payload = {'token':  CONFIG['pushover_token'], \
-                'user':   CONFIG['pushover_user'], \
-                'title':  'Generating Excess Power', \
-                'message': str(int(energy_data['generating']) - \
-                    int(energy_data['using'])) + ' excess watts.'}
-            requests.post('https://api.pushover.net/1/messages.json', data=payload)
-            os.utime('.notified', None)
+        # Provide a notification via Pushover.
+        send_alert()
 
         # See if we've been generating >1kW for at least 20 minutes.
         cursor.execute("SELECT generated \
@@ -160,6 +142,59 @@ def dict_factory(cursor, row):
     for idx, col in enumerate(cursor.description):
         d[col[0]] = row[idx]
     return d
+
+def get_current_status():
+    """Retrieve the most recent generation and use data from the database."""
+    status = {}
+    cursor.execute("SELECT used \
+                    FROM energy \
+                    WHERE used IS NOT NULL \
+                    ORDER BY time DESC \
+                    LIMIT 1")
+    record = cursor.fetchone()
+    status['used'] = record['used']
+
+    cursor.execute("SELECT generated \
+                    FROM energy \
+                    WHERE generated IS NOT NULL \
+                    ORDER BY time DESC \
+                    LIMIT 1")
+    record = cursor.fetchone()
+    status['generated'] = record['generated']
+
+    return status
+
+def export_json():
+    """Store the past 12 hours of power use and generation data in a file."""
+    cursor.execute("SELECT datetime(time, 'unixepoch', 'localtime') AS time, \
+                    used, generated, label, change, temp_int \
+                    FROM energy \
+                    WHERE time >= (strftime('%s','now') - (60 * 60 * 12)) \
+                    ORDER BY time DESC")
+    records = cursor.fetchmany(360)
+    records = list(reversed(records))
+    output = {}
+    output['history'] = records
+    output['cumulative'] = daily_cumulative()
+    output['cumulative']['generated'] = solar_data['energy_today']
+
+    f = open(CONFIG['status_file'], 'w')
+    f.write(json.dumps(output))
+    f.close()
+
+def send_alert():
+    """Use Pushover to report excess wattage generation."""
+    if not os.path.exists('.notified'):
+        os.mknod('.notified')
+    # No more than once per hour.
+    if int(time.time()) - os.path.getmtime('.notified') > 3600:
+        payload = {'token':  CONFIG['pushover_token'], \
+            'user':   CONFIG['pushover_user'], \
+            'title':  'Generating Excess Power', \
+            'message': str(int(energy_data['generating']) - \
+                int(energy_data['using'])) + ' excess watts.'}
+        requests.post('https://api.pushover.net/1/messages.json', data=payload)
+        os.utime('.notified', None)
 
 def nest_status():
     """Get the status of the Nest."""
