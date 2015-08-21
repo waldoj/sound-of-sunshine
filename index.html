@@ -72,37 +72,34 @@ $(document).ready(function() {
 		$("#daily_generated").text(today['generated']);
 		$("#daily_used").text(today['used']);
 
-		status_history = JSON.stringify($(data.history));
+		/* Chart the last 12 hours of power generation and use. */
+		var chart = c3.generate({
+		    bindto: '#chart',
+		    data: {
+		    	x: 'time',
+		    	xFormat: '%Y-%m-%d %H:%M:%S',
+		    	json: data.history,
+		    	keys: {
+		    		value: ['time', 'used', 'generated']
+		    	},
+		    	colors: {
+		    		used: 'red',
+		    		generated: 'green'
+		    	}
+		    },
+		    axis: {
+		    	x: {
+		    		type: 'timeseries',
+		    		tick: {
+		    			format: '%H:%M'
+		    		}
+		    	}
+		    },
+		    point: {
+		    	show: false
+		    }
+		});
 
-	});
-
-	/* Chart the last 12 hours of power generation and use. */
-	console.log(status_history);
-	var chart = c3.generate({
-	    bindto: '#chart',
-	    data: {
-	    	x: 'time',
-	    	xFormat: '%Y-%m-%d %H:%M:%S',
-	    	json: status_history,
-	    	keys: {
-	    		value: ['time', 'used', 'generated']
-	    	},
-	    	colors: {
-	    		used: 'red',
-	    		generated: 'green'
-	    	}
-	    },
-	    axis: {
-	    	x: {
-	    		type: 'timeseries',
-	    		tick: {
-	    			format: '%H:%M'
-	    		}
-	    	}
-	    },
-	    point: {
-	    	show: false
-	    }
 	});
 
 });
