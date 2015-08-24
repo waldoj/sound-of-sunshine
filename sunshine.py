@@ -175,7 +175,19 @@ def export_json():
                     WHERE time >= (strftime('%s','now') - (60 * 60 * 12)) \
                     ORDER BY time DESC")
     records = cursor.fetchmany(10000)
-    records = list(reversed(records))
+
+    # Drop 90% of data points -- we have too many to chart reasonably. We
+    # iterate through in reverse because deleting going in order while deleting
+    # records makes a mess.
+    num_records = len(records)
+    i=0
+    for j in range(num_records):
+        reverse_i = num_records - 1 - j
+        if records[reverse_i]['generated'] > 0:
+            continue
+        if i%9 != 0:
+            records.pop(reverse_i)
+        i+=1
 
     output = {}
     output['history'] = records
