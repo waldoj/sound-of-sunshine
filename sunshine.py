@@ -106,6 +106,7 @@ def main():
             cursor.execute("INSERT INTO energy (time, generated) " \
                             + "VALUES(?, ?)", \
                             (energy_data['generating_time'], energy_data['generating']))
+            db.commit()
 
     # Display the power use and generation data on the command line
     print energy_data
