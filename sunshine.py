@@ -77,31 +77,35 @@ def main():
                         energy_data['temp_int']))
     db.commit()
 
-    # Fetch Enphase data
-    enphase_url = 'https://api.enphaseenergy.com/api/v2/systems/' \
-        + CONFIG['enphase_system'] + '/summary?key=' + CONFIG['enphase_key'] \
-        + '&user_id=' + CONFIG['enphase_user']
-    response = urllib.urlopen(enphase_url)
-    # We make this a global as a lousy hack to access it in export_json()
-    global solar_data
-    solar_data = json.loads(response.read())
-    
-    energy_data['generating'] = int(solar_data['current_power'])
-    energy_data['generating_time'] = int(float(solar_data['last_report_at']))
+    # Fetch Enphase data if the sun is shining.
+    # QUICK HACK -- replace this with something way more elegant.
+    from datetime import datetime, time
+    now = datetime.now()
+    now_time = now.time()
+    if time(7,00) <= now.time() <= time(21,00):
+        enphase_url = 'https://api.enphaseenergy.com/api/v2/systems/' \
+            + CONFIG['enphase_system'] + '/summary?key=' + CONFIG['enphase_key'] \
+            + '&user_id=' + CONFIG['enphase_user']
+        response = urllib.urlopen(enphase_url)
+        # We make this a global as a lousy hack to access it in export_json()
+        global solar_data
+        solar_data = json.loads(response.read())
+        
+        energy_data['generating'] = int(solar_data['current_power'])
+        energy_data['generating_time'] = int(float(solar_data['last_report_at']))
 
-    # See when we last recorded power generation data, to avoid duplicates.
-    cursor.execute("SELECT time \
-                    FROM energy \
-                    WHERE generated IS NOT NULL \
-                    ORDER BY time DESC \
-                    LIMIT 1")
-    last = cursor.fetchone()
-    if last['time'] < energy_data['generating_time']:
+        # See when we last recorded power generation data, to avoid duplicates.
+        cursor.execute("SELECT time \
+                        FROM energy \
+                        WHERE generated IS NOT NULL \
+                        ORDER BY time DESC \
+                        LIMIT 1")
+        last = cursor.fetchone()
+        if last['time'] < energy_data['generating_time']:
 
-        cursor.execute("INSERT INTO energy (time, generated) " \
-                        + "VALUES(?, ?)", \
-                        (energy_data['generating_time'], energy_data['generating']))
-        db.commit()
+            cursor.execute("INSERT INTO energy (time, generated) " \
+                            + "VALUES(?, ?)", \
+                            (energy_data['generating_time'], energy_data['generating']))
 
     # Display the power use and generation data on the command line
     print energy_data
