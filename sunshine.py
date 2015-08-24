@@ -193,8 +193,12 @@ def export_json():
     output['history'] = records
     
     output['today'] = daily_cumulative()
-    output['today']['generated'] = solar_data['energy_today']
-
+    try:
+        solar_data['energy_today']
+    except NameError:
+        pass
+    else:
+        output['today']['generated'] = solar_data['energy_today']
     output['current'] = get_current_status()
 
     f = open(CONFIG['status_file'], 'w')
