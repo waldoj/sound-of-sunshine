@@ -83,12 +83,25 @@ $(document).ready(function() {
 		    	x: {
 		    		type: 'timeseries',
 		    		tick: {
-		    			format: '%H:%M'
+		    			format: '%H:%M',
+		    			count: 50
 		    		}
+		    	},
+		    	y: {
+		    		label: 'Watts'
 		    	}
 		    },
 		    point: {
 		    	show: false
+		    },
+		    zoom: {
+		    	enabled: true
+		    },
+		    line: {
+		    	connectNull: true
+		    },
+		    regions: {
+		    	'used': [{'style': 'dashed'}]
 		    }
 		});
 
