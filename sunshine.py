@@ -14,6 +14,7 @@ import time
 import datetime
 import requests
 import yaml
+import decimal
 from subprocess import call
 
 # Load the config file.
@@ -261,7 +262,7 @@ def daily_cumulative():
     # Figure out the timestamp for midnight, when today started.
     today = datetime.date.today()
     d = datetime.datetime(today.year, today.month, today.day)
-    midnight = time.mktime(d.timetuple())
+    midnight = int(decimal.Decimal(time.mktime(d.timetuple())).normalize())
     
     cursor.execute("SELECT time, used, generated \
                     FROM energy \
