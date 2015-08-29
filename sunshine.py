@@ -275,11 +275,11 @@ def daily_cumulative():
     generated = []
     for record in records:
         duration = int(record['time'] - prior)
-        used.append(int(record['used']) / int(60.0 * 60.0) / duration)
+        used.append(round(float(record['used']) / 3600 * float(duration), 2))
         prior = record['time']
 
     cumulative = {}
-    cumulative['used'] = round(sum(used) / len(used) * 10000, 2)
+    cumulative['used'] = round(sum(used) / len(used) * 10000)
 
     return cumulative
 
