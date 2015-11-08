@@ -92,8 +92,8 @@ def main():
         global solar_data
         solar_data = json.loads(response.read())
         
-        energy_data['generating'] = int(solar_data['current_power'])
-        energy_data['generating_time'] = int(float(solar_data['last_report_at']))
+        energy_data['generated'] = int(solar_data['current_power'])
+        energy_data['generated_time'] = int(float(solar_data['last_report_at']))
 
         # See when we last recorded power generation data, to avoid duplicates.
         cursor.execute("SELECT time \
@@ -102,11 +102,11 @@ def main():
                         ORDER BY time DESC \
                         LIMIT 1")
         last = cursor.fetchone()
-        if last['time'] < energy_data['generating_time']:
+        if last['time'] < energy_data['generated_time']:
 
             cursor.execute("INSERT INTO energy (time, generated) " \
                             + "VALUES(?, ?)", \
-                            (energy_data['generating_time'], energy_data['generating']))
+                            (energy_data['generated_time'], energy_data['generated']))
             db.commit()
 
     # Display the power use and generation data on the command line
@@ -214,9 +214,9 @@ def send_alert():
     if int(time.time()) - os.path.getmtime('.notified') > 3600:
         payload = {'token':  CONFIG['pushover_token'], \
             'user':   CONFIG['pushover_user'], \
-            'title':  'Generating Excess Power', \
-            'message': str(int(energy_data['generating']) - \
-                int(energy_data['using'])) + ' excess watts.'}
+            'title':  'generated Excess Power', \
+            'message': str(int(energy_data['generated']) - \
+                int(energy_data['used'])) + ' excess watts.'}
         requests.post('https://api.pushover.net/1/messages.json', data=payload)
         os.utime('.notified', None)
 
