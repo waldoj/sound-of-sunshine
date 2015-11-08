@@ -79,11 +79,11 @@ def main():
     db.commit()
 
     # Fetch Enphase data if the sun is shining.
-    # QUICK HACK -- replace this with something way more elegant.
+    #if is_daylight():
     from datetime import datetime, time
     now = datetime.now()
     now_time = now.time()
-    if time(7,00) <= now.time() <= time(21,00):
+    if time(7,00) <= now.time() <= time(20,00):
         enphase_url = 'https://api.enphaseenergy.com/api/v2/systems/' \
             + CONFIG['enphase_system'] + '/summary?key=' + CONFIG['enphase_key'] \
             + '&user_id=' + CONFIG['enphase_user']
@@ -288,6 +288,47 @@ def daily_cumulative():
     cumulative['used'] = round(sum(used) / len(used) * 10000)
 
     return cumulative
+
+def is_daylight():
+    """Report whether the sun is up."""
+
+    # If we've cached daylight data, and it's less than 3 days old, use it.
+    if os.path.exists('.daylight'):
+        file_status = os.stat('.daylight')
+        if (int(time.time()) - file_status.st_mtime) < (60 * 60 * 72):
+            schedule = json.loads(open('.daylight').read(10000))
+
+    # If we don't have cached data, retrieve it.
+    try:
+        schedule
+    except NameError:
+        api_url = 'http://api.sunrise-sunset.org/json?lat=' \
+            + CONFIG['location']['lat'] + '&lng=' + CONFIG['location']['lon']
+        response = urllib.urlopen(api_url)
+        schedule = json.loads(response.read())
+        if schedule['status'] is 'OK':
+            print 'Fatal error: sunrise/sunset times could not be determined'
+            sys.exit(1)
+        else:
+            f = open('.daylight', 'w')
+            f.write(json.dumps(schedule))
+            f.close()
+    else:
+        pass
+
+    from datetime import datetime, time
+    now = datetime.now()
+    print now.time()
+    if datetime.strptime(schedule['results']['sunrise'].time(), '%I:%M:%S %p').time < now.time() \
+        <= datetime.strptime(schedule['results']['sunset'], '%I:%M:%S %p').time:
+        print "yup"
+        sys.exit()
+        return True
+    else:
+        print "nope"
+        sys.exit()
+        return False
+
 
 def label_use():
     """Label identifable draws on the power."""
