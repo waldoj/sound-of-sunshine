@@ -233,6 +233,12 @@ def nest_status():
     status = call(['nestcontrol/nest.py', '-u ' + CONFIG['nest']['username'] \
         + ' -p ' + CONFIG['nest']['password'] + ' -f'])
     status = json.loads(status)[0]['shared']
+
+    # Cache the status of the Nest.
+    f = open('.neststatus', 'w')
+    f.write(json.dumps(status))
+    f.close()
+
     return status
 
 def nest_set():
