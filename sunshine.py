@@ -30,6 +30,9 @@ def main():
     global db
     global cursor
 
+    # Make energy data available to all functions.
+    global energy_data
+
     # Open up a SQLite connection.
     try:
         db = sqlite3.connect('energy.db')
@@ -52,31 +55,7 @@ def main():
             + " temp_int INT NULL, temp_ext INT NULL")
         db.commit()
 
-    # See when we last recorded power use data.
-    cursor.execute("SELECT time \
-                    FROM energy \
-                    WHERE used IS NOT NULL \
-                    ORDER BY time DESC \
-                    LIMIT 1")
-    last = cursor.fetchone()
-
-    # Parse cron-retrieved records, providing the average amount of power used
-    # in the prior two minutes. (The data file contains records with a
-    # granularity that's much finer.)
     energy_data = dict()
-    records = csvkit.CSVKitDictReader(open(CONFIG['data_file'], 'rb'))
-    watts = []
-    for record in records:
-        if last['time'] >= int(round(float(record['src']))):
-            continue
-        energy_data['time'] = int(round(float(record['src'])))
-        energy_data['using'] = int(record['ch1watts']) + int(record['ch2watts'])
-        energy_data['temp_int'] = int(float(record['tmprF']))
-        cursor.execute("INSERT INTO energy (time, used, temp_int) " \
-                        + "VALUES(?, ?, ?)", \
-                        (energy_data['time'], energy_data['using'], \
-                        energy_data['temp_int']))
-    db.commit()
 
     # Fetch Enphase data if the sun is shining.
     #if is_daylight():
@@ -108,6 +87,35 @@ def main():
                             + "VALUES(?, ?)", \
                             (energy_data['generated_time'], energy_data['generated']))
             db.commit()
+    # Otherwise, note that we're generating no power.
+    else:
+        energy_data['generated'] = 0
+
+    # See when we last recorded power use data.
+    cursor.execute("SELECT time \
+                    FROM energy \
+                    WHERE used IS NOT NULL \
+                    ORDER BY time DESC \
+                    LIMIT 1")
+    last = cursor.fetchone()
+    
+    # Parse cron-retrieved records, providing the average amount of power used
+    # in the prior two minutes. (The data file contains records with a
+    # granularity that's much finer.)
+    records = csvkit.CSVKitDictReader(open(CONFIG['data_file'], 'rb'))
+    watts = []
+    for record in records:
+        if last['time'] >= int(round(float(record['src']))):
+            continue
+        energy_data['time'] = int(round(float(record['src'])))
+        energy_data['used'] = abs(int(record['ch1watts']) + int(record['ch2watts']) \
+            - energy_data['generated'])
+        energy_data['temp_int'] = int(float(record['tmprF']))
+        cursor.execute("INSERT INTO energy (time, used, temp_int) " \
+                        + "VALUES(?, ?, ?)", \
+                        (energy_data['time'], energy_data['used'], \
+                        energy_data['temp_int']))
+    db.commit()
 
     # Display the power use and generation data on the command line
     print energy_data
@@ -178,8 +186,8 @@ def export_json():
     records = cursor.fetchmany(10000)
 
     # Drop 90% of data points -- we have too many to chart reasonably. We
-    # iterate through in reverse because deleting going in order while deleting
-    # records makes a mess.
+    # iterate through in reverse because going in order while deleting records
+    # makes a mess.
     num_records = len(records)
     i=0
     for j in range(num_records):
