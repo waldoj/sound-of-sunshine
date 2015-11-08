@@ -285,7 +285,10 @@ def daily_cumulative():
         prior = record['time']
 
     cumulative = {}
-    cumulative['used'] = round(sum(used) / len(used) * 10000)
+    if len(used) > 0:
+        cumulative['used'] = round(sum(used) / len(used) * 10000)
+    else:
+        cumulative['used'] = 0
 
     return cumulative
 
